@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI API Security Gateway</title>
+  <style>
+    :root{--bg:#071018;--panel:#0d1822;--panel2:#101f2c;--text:#e7f0f7;--muted:#91a7b8;--accent:#58d7ff;--danger:#ff6b78;--warn:#ffc857;--ok:#5ce29d;border:rgba(255,255,255,.08)}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 20% 0,#10283a 0,#071018 40%,#050b10 100%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,Arial}
+    .wrap{max-width:1200px;margin:0 auto;padding:28px}.header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{color:var(--accent);letter-spacing:.14em;font-size:12px;font-weight:700}.title{font-size:34px;margin:6px 0}.sub{color:var(--muted);max-width:760px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:24px 0}.card{background:rgba(13,24,34,.9);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.15)}.metric{font-size:30px;font-weight:800}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}.two{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.row{display:grid;grid-template-columns:120px 1fr;gap:10px;margin:10px 0;align-items:center}.row input,.row select,.row textarea{width:100%;background:#08131c;color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px}.row textarea{min-height:90px;font-family:ui-monospace,monospace}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.btn{background:#123346;border:1px solid #225775;color:var(--text);padding:10px 13px;border-radius:9px;cursor:pointer}.btn:hover{border-color:var(--accent)}.btn.primary{background:#0e5f79;border-color:#1a8fb7}.result{margin-top:16px;border-radius:12px;padding:16px;background:#08131c;border:1px solid var(--border);white-space:pre-wrap}.risk{font-size:44px;font-weight:900}.allow{color:var(--ok)}.challenge{color:var(--warn)}.block{color:var(--danger)}.finding{border-left:4px solid var(--danger);padding:10px 12px;background:#0c1822;margin:10px 0;border-radius:7px}.small{font-size:12px;color:var(--muted)} table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px;border-bottom:1px solid var(--border)}.pill{padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700}.pill.allow{background:#103526}.pill.challenge{background:#3d3210}.pill.block{background:#3d141a}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}@media(max-width:600px){.grid{grid-template-columns:1fr}.header{flex-direction:column}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="eyebrow">HACKATHON PROTOTYPE</div>
+      <div class="title">AI API Security Gateway</div>
+      <div class="sub">Runtime protection for APIs and autonomous AI-agent actions. This demo uses a deterministic risk engine so it works offline.</div>
+    </div>
+    <div class="card small">Status: <strong id="status">checking…</strong></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Events</div><div class="metric" id="m-total">0</div></div>
+    <div class="card"><div class="label">Blocked</div><div class="metric" id="m-blocked">0</div></div>
+    <div class="card"><div class="label">Challenged</div><div class="metric" id="m-challenged">0</div></div>
+    <div class="card"><div class="label">Average risk</div><div class="metric" id="m-risk">0</div></div>
+  </div>
+
+  <div class="two">
+    <section class="card">
+      <h2>Request Analyzer</h2>
+      <div class="row"><label>Method</label><select id="method"><option>GET</option><option>POST</option><option>PATCH</option><option>DELETE</option></select></div>
+      <div class="row"><label>Path</label><input id="path" value="/api/users/1002" /></div>
+      <div class="row"><label>User ID</label><input id="user_id" value="1001" /></div>
+      <div class="row"><label>Role</label><select id="role"><option>user</option><option>manager</option><option>admin</option></select></div>
+      <div class="row"><label>Client</label><select id="client"><option>human</option><option>ai-agent</option></select></div>
+      <div class="row"><label>Token</label><input id="token" value="demo-token" /></div>
+      <div class="row"><label>Source IP</label><input id="ip" value="127.0.0.1" /></div>
+      <div class="row"><label>Body JSON</label><textarea id="body">{}</textarea></div>
+      <div class="buttons">
+        <button class="btn" onclick="presetBola()">Demo BOLA</button>
+        <button class="btn" onclick="presetAgent()">Demo AI transfer</button>
+        <button class="btn" onclick="presetSsrf()">Demo SSRF</button>
+        <button class="btn primary" onclick="analyze()">Analyze request</button>
+      </div>
+      <div id="result" class="result">Run an analysis to see the gateway decision.</div>
+    </section>
+
+    <section class="card">
+      <h2>Security Events</h2>
+      <div id="events" class="small">No events yet.</div>
+      <hr style="border-color:var(--border);border-width:1px 0 0;margin:18px 0">
+      <h3>Top Findings</h3>
+      <div id="findings" class="small">No findings yet.</div>
+    </section>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+async function refresh(){
+  const [m,e,h]=await Promise.all([fetch('/api/metrics'),fetch('/api/events'),fetch('/api/health')]);
+  const metrics=await m.json(), events=await e.json(), health=await h.json();
+  $('status').textContent=health.status.toUpperCase();
+  $('m-total').textContent=metrics.total_events; $('m-blocked').textContent=metrics.blocked; $('m-challenged').textContent=metrics.challenged; $('m-risk').textContent=metrics.avg_risk;
+  const rows=events.events.slice(0,12).map(x=>`<tr><td>${x.method}</td><td>${x.path}</td><td>${x.risk_score}</td><td><span class="pill ${x.decision.toLowerCase()}">${x.decision}</span></td><td>${x.finding_codes.join(', ')||'—'}</td></tr>`).join('');
+  $('events').innerHTML=rows?`<table><thead><tr><th>Method</th><th>Path</th><th>Risk</th><th>Decision</th><th>Findings</th></tr></thead><tbody>${rows}</tbody></table>`:'No events yet.';
+  $('findings').innerHTML=Object.entries(metrics.top_findings).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="margin:7px 0">${k}: <strong>${v}</strong></div>`).join('')||'No findings yet.';
+}
+function payload(){let body={}; try{body=JSON.parse($('body').value||'{}')}catch(e){alert('Body JSON is invalid');throw e}return {method:$('method').value,path:$('path').value,user_id:$('user_id').value||null,role:$('role').value,token:$('token').value||null,client_type:$('client').value,source_ip:$('ip').value,body};}
+async function analyze(){const r=await fetch('/api/gateway/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const d=await r.json(); const cls=d.decision.toLowerCase(); $('result').innerHTML=`<div class="risk ${cls}">${d.risk_score}/100 — ${d.decision}</div><div style="margin:8px 0 16px">${d.explanation}</div>`+(d.findings||[]).map(f=>`<div class="finding"><strong>${f.code}: ${f.title}</strong><div class="small">${f.detail}</div><div class="small">Remediation: ${f.remediation}</div></div>`).join(''); refresh();}
+function presetBola(){ $('method').value='GET'; $('path').value='/api/users/1002'; $('user_id').value='1001'; $('role').value='user'; $('client').value='human'; $('body').value='{}';}
+function presetAgent(){ $('method').value='POST'; $('path').value='/api/transfer'; $('user_id').value='1001'; $('role').value='user'; $('client').value='ai-agent'; $('body').value=JSON.stringify({amount:50000,currency:'INR',recipient:'demo-merchant'},null,2);}
+function presetSsrf(){ $('method').value='POST'; $('path').value='/api/fetch'; $('user_id').value='1001'; $('role').value='user'; $('client').value='human'; $('body').value=JSON.stringify({url:'http://169.254.169.254/latest/meta-data/'},null,2);}
+refresh(); setInterval(refresh,4000);
+</script>
+</body></html>

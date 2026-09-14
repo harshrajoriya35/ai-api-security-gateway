@@ -1,0 +1,7 @@
+services:
+  gateway:
+    build: .
+    container_name: ai-api-security-gateway
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
